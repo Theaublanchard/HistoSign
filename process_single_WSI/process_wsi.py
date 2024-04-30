@@ -35,22 +35,20 @@ def parse_arg():
     parser.add_argument(
         "--ctranspath",
         type=Path,
-        default = Path(r"C:\Users\inserm\Documents\histo_sign\ctranspath.pth"),
+        default=Path(r"C:\Users\inserm\Documents\histo_sign\ctranspath.pth"),
         help="Path to the ctrans model",
     )
     parser.add_argument(
         "--model_sign_path",
         type=Path,
-        default=Path(r"C:\Users\inserm\Documents\histo_sign\dataset\best_model_path.npy"),
-        # default=Path(r"C:\Users\inserm\Documents\histo_sign\dataset\classic_basal_model_path.npy"),
-        # default=Path(r"C:\Users\inserm\Documents\histo_sign\dataset\hwang_model_path.npy"),
-        # default=Path(r"C:\Users\inserm\Documents\histo_sign\dataset\all_model_path.npy"),
-        help="Path the file containing a dictionary whose keys are the class names and the values are the paths to the models",
+        # default=Path(r"dataset\all_sign.txt"),
+        default=Path(r"dataset\best_sign.txt"),
+        help="Path to the text file containing the signature names to be predicted",
     )
     parser.add_argument(
         "--model_tum_path",
         type=Path,
-        default=Path(r"C:\Users\inserm\Documents\histo_sign\trainings\tumors\2024-03-25_14-43-57\model.pth"),
+        default=Path(r"dataset\model_tum_seg.pth"),
         help="Path to the tumor model",
     )
     parser.add_argument(
@@ -73,12 +71,22 @@ def parse_arg():
     return parsed_args
 
 
+def get_models_paths(model_sign_path, folder_path="dataset/models"):
+    sign_name = np.loadtxt(model_sign_path, dtype=str, encoding="utf-8")
+    model_dict = {sign: Path(folder_path) / sign / "model.pth" for sign in sign_name}
+    # verify all models exist
+    for sign, path in model_dict.items():
+        if not path.exists():
+            raise FileNotFoundError(f"Model {sign} not found at {path}")
+    return model_dict
+
+
 def main(args):
     slidename = args.wsi.stem
     print("Filtering white tiles...")
 
     tiles_coord, coord_thumb, final_mask, img = filter_whites(
-        args.wsi, tile_size=224, folder_path=args.temp_dir
+        str(args.wsi), tile_size=224, folder_path=args.temp_dir
     )
 
     print("Extracting features...")
@@ -99,7 +107,7 @@ def main(args):
     x = torch.from_numpy(x).unsqueeze(0).float()
 
     print("Predicting signatures...")
-    model_paths_dict = np.load(args.model_sign_path, allow_pickle=True).item()
+    model_paths_dict = get_models_paths(args.model_sign_path)
 
     df_wsi = pd.DataFrame()
     df_tiles = pd.DataFrame({"z": coord[:, 0], "x": coord[:, 1], "y": coord[:, 2]})
